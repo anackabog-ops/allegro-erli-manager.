@@ -13,7 +13,7 @@ const SEED_ID = 'synthetic-order-set-v1';
 const DEMO_PG_PORT = 35432;
 const DEMO_PG_DATABASE = 'openlinker';
 const DB = {
-  host: process.env.OL_DEMO_PGHOST ?? 'localhost',
+  host: process.env.OL_DEMO_PGHOST ?? '127.0.0.1',
   port: Number(process.env.OL_DEMO_PGPORT ?? DEMO_PG_PORT),
   user: process.env.OL_DEMO_PGUSER ?? 'postgres',
   password: process.env.OL_DEMO_PGPASSWORD ?? 'postgres',
@@ -43,9 +43,9 @@ const ADDRESS = {
   phone: '+48000000000',
 };
 
-// For two-line baskets, equal unit prices across quantities 1 and 2 produce
-// the displayed PLN 379.80 total; one-line baskets vary between PLN 49.90 and
-// PLN 79.90.
+// Tuple fields: source platform, order suffix, ISO timestamp, source order
+// status, record status, hold reason, line count, and unit price in PLN.
+// Two-line baskets use quantities 1 + 2 at PLN 126.60/unit = PLN 379.80.
 const DEFINITIONS = [
   ['allegro', '001', '2026-09-10T09:15:00.000Z', 'processing', 'ready', null, 1, 79.9],
   ['erli', '002', '2026-09-12T13:40:00.000Z', 'processing', 'ready', 'stock-shortfall', 1, 49.9],
@@ -62,7 +62,7 @@ const DEFINITIONS = [
 ];
 
 function isLoopback(host) {
-  if (host === 'localhost' || host === '::1') return true;
+  if (host === '::1') return true;
   return isIP(host) === 4 && Number(host.split('.')[0]) === 127;
 }
 
