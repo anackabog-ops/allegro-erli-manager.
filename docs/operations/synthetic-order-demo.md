@@ -29,6 +29,7 @@ API_HOST_PORT=33000
 WEB_HOST_PORT=38090
 OL_DEMO_MODE=true
 OL_REGISTRATION_ENABLED=false
+OL_BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-unique-local-password
 ```
 
 Generate `OPENLINKER_CREDENTIALS_ENCRYPTION_KEY` locally as described in
@@ -69,10 +70,10 @@ after restarting the API:
 docker compose -f docker-compose.yml -f docker-compose.demo.yml restart api
 ```
 
-Then open the web UI from the machine running Docker and sign in with the
-locally configured demo admin credentials. The default is `admin` / `admin`
-only when `OL_BOOTSTRAP_ADMIN_PASSWORD` is unset; never expose that default on
-a network. On that same machine, open `http://127.0.0.1:38090`.
+Set `OL_BOOTSTRAP_ADMIN_PASSWORD` to a unique local password before starting
+the services; do not rely on the application default. Then open the web UI from
+the machine running Docker and sign in with that password. On that same machine,
+open `http://127.0.0.1:38090`.
 
 The demo buyer identity, addresses, phone numbers, offers, products, and
 delivery are synthetic. No order is sent or dispatched. Internal order notes

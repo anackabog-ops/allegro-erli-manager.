@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "seed:demo-orders": "node seed-demo-orders.mjs",
+    "test:seed-demo-orders": "node --test seed-demo-orders.guard.test.mjs",
     "test:e2e": "pnpm test:e2e:unattended",
     "test:e2e:unattended": "playwright test --project=setup --project=smoke --project=golden-path --project=webhooks --project=woocommerce-parity --project=lifecycle --project=access-control --project=shipping --project=invoicing --project=rich-text --project=sales-documents",
     "test:e2e:full-flow": "E2E_ATTENDED=1 playwright test --project=full-flow --headed",
