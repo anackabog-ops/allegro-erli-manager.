@@ -10,12 +10,14 @@ import pg from 'pg';
 
 const { Client } = pg;
 const SEED_ID = 'synthetic-order-set-v1';
+const DEMO_PG_PORT = 35432;
+const DEMO_PG_DATABASE = 'openlinker';
 const DB = {
   host: process.env.OL_DEMO_PGHOST ?? 'localhost',
-  port: Number(process.env.OL_DEMO_PGPORT ?? '35432'),
+  port: Number(process.env.OL_DEMO_PGPORT ?? DEMO_PG_PORT),
   user: process.env.OL_DEMO_PGUSER ?? 'postgres',
   password: process.env.OL_DEMO_PGPASSWORD ?? 'postgres',
-  database: process.env.OL_DEMO_PGDATABASE ?? 'openlinker',
+  database: process.env.OL_DEMO_PGDATABASE ?? DEMO_PG_DATABASE,
 };
 
 const SOURCES = [
@@ -41,19 +43,22 @@ const ADDRESS = {
   phone: '+48000000000',
 };
 
+// For two-line baskets, equal unit prices across quantities 1 and 2 produce
+// the displayed PLN 379.80 total; one-line baskets vary between PLN 49.90 and
+// PLN 79.90.
 const DEFINITIONS = [
-  ['allegro', '001', '2026-09-10T09:15:00.000Z', 'processing', 'ready', null, 0],
-  ['erli', '002', '2026-09-12T13:40:00.000Z', 'processing', 'ready', 'stock-shortfall', 1],
-  ['allegro', '003', '2026-09-15T08:05:00.000Z', 'pending', 'awaiting_mapping', null, 2],
-  ['erli', '004', '2026-09-18T16:25:00.000Z', 'pending', 'ready', 'payment-review', 0],
-  ['allegro', '005', '2026-09-20T11:10:00.000Z', 'processing', 'source_deleted', null, 1],
-  ['erli', '006', '2026-09-22T17:55:00.000Z', 'cancelled', 'ready', null, 0],
-  ['allegro', '007', '2026-09-25T10:30:00.000Z', 'completed', 'ready', null, 2],
-  ['erli', '008', '2026-09-27T12:00:00.000Z', 'pending', 'awaiting_mapping', null, 1],
-  ['allegro', '009', '2026-09-29T14:45:00.000Z', 'processing', 'ready', 'address-invalid', 0],
-  ['erli', '010', '2026-10-01T09:20:00.000Z', 'completed', 'ready', null, 2],
-  ['allegro', '011', '2026-10-02T15:35:00.000Z', 'pending', 'ready', null, 1],
-  ['erli', '012', '2026-10-03T18:05:00.000Z', 'cancelled', 'source_deleted', null, 0],
+  ['allegro', '001', '2026-09-10T09:15:00.000Z', 'processing', 'ready', null, 1, 79.9],
+  ['erli', '002', '2026-09-12T13:40:00.000Z', 'processing', 'ready', 'stock-shortfall', 1, 49.9],
+  ['allegro', '003', '2026-09-15T08:05:00.000Z', 'pending', 'awaiting_mapping', null, 2, 126.6],
+  ['erli', '004', '2026-09-18T16:25:00.000Z', 'pending', 'ready', 'payment-review', 1, 79.9],
+  ['allegro', '005', '2026-09-20T11:10:00.000Z', 'processing', 'source_deleted', null, 1, 49.9],
+  ['erli', '006', '2026-09-22T17:55:00.000Z', 'cancelled', 'ready', null, 1, 79.9],
+  ['allegro', '007', '2026-09-25T10:30:00.000Z', 'completed', 'ready', null, 2, 126.6],
+  ['erli', '008', '2026-09-27T12:00:00.000Z', 'pending', 'awaiting_mapping', null, 1, 49.9],
+  ['allegro', '009', '2026-09-29T14:45:00.000Z', 'processing', 'ready', 'address-invalid', 1, 79.9],
+  ['erli', '010', '2026-10-01T09:20:00.000Z', 'completed', 'ready', null, 2, 126.6],
+  ['allegro', '011', '2026-10-02T15:35:00.000Z', 'pending', 'ready', null, 1, 49.9],
+  ['erli', '012', '2026-10-03T18:05:00.000Z', 'cancelled', 'source_deleted', null, 1, 79.9],
 ];
 
 function isLoopback(host) {
@@ -71,27 +76,35 @@ function assertDemoTarget() {
   if (process.env.OL_ALLOW_SYNTHETIC_ORDER_SEED !== 'YES') {
     throw new Error('Set OL_ALLOW_SYNTHETIC_ORDER_SEED=YES to confirm this seed.');
   }
-  if (!isLoopback(DB.host) || DB.database !== 'openlinker' || DB.port !== 35432) {
+  if (!isLoopback(DB.host) || DB.database !== DEMO_PG_DATABASE || DB.port !== DEMO_PG_PORT) {
     throw new Error(
-      'The seed only accepts the isolated local demo database at loopback:35432/openlinker.'
+      `The seed only accepts the isolated local demo database at loopback:${DEMO_PG_PORT}/${DEMO_PG_DATABASE}.`
     );
   }
 }
 
-function makeOrder([platformType, serial, placedAt, status, recordStatus, holdReason, itemCount]) {
+function makeOrder([
+  platformType,
+  serial,
+  placedAt,
+  status,
+  recordStatus,
+  holdReason,
+  itemCount,
+  unitPrice,
+]) {
   const source = SOURCES.find((candidate) => candidate.platformType === platformType);
   if (!source) throw new Error(`No demo source configured for ${platformType}.`);
 
   const internalOrderId = `ol_order_demo_${platformType}_${serial}`;
   const orderNumber = `DEMO-${platformType.toUpperCase()}-${serial}`;
-  const itemTotal = itemCount === 2 ? 189.9 : itemCount === 1 ? 49.9 : 79.9;
-  const items = Array.from({ length: itemCount || 1 }, (_, index) => ({
+  const items = Array.from({ length: itemCount }, (_, index) => ({
     id: `${serial}-line-${index + 1}`,
     productId: recordStatus === 'ready' ? `demo-product-${index + 1}` : null,
     variantId: recordStatus === 'ready' ? `demo-variant-${index + 1}` : null,
     externalOfferId: `DEMO-OFFER-${serial}-${index + 1}`,
     quantity: index + 1,
-    price: Number((itemTotal / (index + 1)).toFixed(2)),
+    price: unitPrice,
     sku: `DEMO-SKU-${serial}-${index + 1}`,
     name: `DEMO synthetic product ${index + 1}`,
     taxRate: '23',
@@ -175,6 +188,7 @@ async function seed() {
   assertDemoTarget();
   const client = new Client(DB);
   await client.connect();
+  let transactionStarted = false;
 
   try {
     const {
@@ -194,6 +208,7 @@ async function seed() {
     }
 
     await client.query('BEGIN');
+    transactionStarted = true;
     let insertedConnections = 0;
     for (const source of SOURCES) {
       const result = await client.query(
@@ -306,13 +321,20 @@ async function seed() {
     }
 
     await client.query('COMMIT');
+    transactionStarted = false;
     console.log(
       `Synthetic demo seed complete: ${ORDERS.length} orders, ` +
         `${insertedOrders} new orders, ${insertedConnections} new disabled source labels, ` +
         `${insertedHolds} new hold rows.`
     );
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (transactionStarted) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Preserve the failure that triggered the rollback.
+      }
+    }
     throw error;
   } finally {
     await client.end();

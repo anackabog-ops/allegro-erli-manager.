@@ -47,6 +47,10 @@ the ordinary development stack. The ports bind to loopback only.
 Run this explicit command from the repository root. It requires both opt-in
 flags, refuses `NODE_ENV=production` and non-loopback/non-demo database
 settings, and writes only its fixed IDs using conflict-do-nothing inserts:
+the database port and name are intentionally fixed to `35432` and `openlinker`.
+Database credentials default to `postgres` / `postgres`; if the isolated
+Postgres service uses different values, pass them through
+`OL_DEMO_PGUSER` / `OL_DEMO_PGPASSWORD`.
 
 ```bash
 OL_DEMO_MODE=true \
@@ -68,7 +72,7 @@ docker compose -f docker-compose.yml -f docker-compose.demo.yml restart api
 Then open the web UI from the machine running Docker and sign in with the
 locally configured demo admin credentials. The default is `admin` / `admin`
 only when `OL_BOOTSTRAP_ADMIN_PASSWORD` is unset; never expose that default on
-a network.
+a network. On that same machine, open `http://127.0.0.1:38090`.
 
 The demo buyer identity, addresses, phone numbers, offers, products, and
 delivery are synthetic. No order is sent or dispatched. Internal order notes
