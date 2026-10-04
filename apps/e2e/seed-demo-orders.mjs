@@ -118,7 +118,7 @@ function makeOrder([platformType, serial, placedAt, status, recordStatus, holdRe
       shipping: { methodId: 'demo-delivery', methodName: 'DEMO delivery (not dispatched)' },
       totals: {
         subtotal: total,
-        tax: Number((total * 23 / 123).toFixed(2)),
+        tax: Number(((total * 23) / 123).toFixed(2)),
         shipping: 0,
         total,
         currency: 'PLN',
@@ -177,7 +177,9 @@ async function seed() {
   await client.connect();
 
   try {
-    const { rows: [database] } = await client.query(
+    const {
+      rows: [database],
+    } = await client.query(
       `SELECT current_database() AS name, to_regclass('public.order_records') AS orders,
               to_regclass('public.connections') AS connections,
               to_regclass('public.order_holds') AS holds`
@@ -200,15 +202,18 @@ async function seed() {
            "adapterKey", "enabledCapabilities")
          VALUES ($1, $2, $3, 'disabled',
            jsonb_build_object('openlinkerDemo', jsonb_build_object(
-             'seedId', $4, 'syntheticOnly', true, 'noExternalCredentials', true)),
+             'seedId', $4::text, 'syntheticOnly', true, 'noExternalCredentials', true)),
            'synthetic-demo-no-credentials', NULL, '[]'::jsonb)
          ON CONFLICT ("id") DO NOTHING`,
         [source.id, source.platformType, source.name, SEED_ID]
       );
       insertedConnections += result.rowCount ?? 0;
 
-      const { rows: [stored] } = await client.query(
-        `SELECT "platformType", "name", "status", "credentialsRef", "config"
+      const {
+        rows: [stored],
+      } = await client.query(
+        `SELECT "platformType", "name", "status", "credentialsRef", "config",
+                "enabledCapabilities"
            FROM "connections" WHERE "id" = $1`,
         [source.id]
       );
@@ -217,7 +222,9 @@ async function seed() {
         stored.name !== source.name ||
         stored.status !== 'disabled' ||
         stored.credentialsRef !== 'synthetic-demo-no-credentials' ||
-        stored.config?.openlinkerDemo?.seedId !== SEED_ID
+        stored.config?.openlinkerDemo?.seedId !== SEED_ID ||
+        stored.config?.openlinkerDemo?.noExternalCredentials !== true ||
+        stored.enabledCapabilities?.length !== 0
       ) {
         throw new Error(`Refusing to reuse non-demo connection row ${source.id}.`);
       }
@@ -256,7 +263,9 @@ async function seed() {
       );
       insertedOrders += result.rowCount ?? 0;
 
-      const { rows: [stored] } = await client.query(
+      const {
+        rows: [stored],
+      } = await client.query(
         `SELECT "sourceConnectionId", "orderSnapshot"->'demo'->>'seedId' AS "seedId"
            FROM "order_records" WHERE "internalOrderId" = $1`,
         [order.internalOrderId]
@@ -277,6 +286,23 @@ async function seed() {
         [hold.id, hold.orderId, hold.reason, hold.note, hold.placedAt]
       );
       insertedHolds += result.rowCount ?? 0;
+
+      const {
+        rows: [stored],
+      } = await client.query(
+        `SELECT "internalOrderId", "reason", "note", "placedByUserId", "releasedAt"
+           FROM "order_holds" WHERE "id" = $1`,
+        [hold.id]
+      );
+      if (
+        stored?.internalOrderId !== hold.orderId ||
+        stored.reason !== hold.reason ||
+        stored.note !== hold.note ||
+        stored.placedByUserId !== 'synthetic-demo-operator' ||
+        stored.releasedAt !== null
+      ) {
+        throw new Error(`Refusing to reuse non-demo hold row ${hold.id}.`);
+      }
     }
 
     await client.query('COMMIT');
