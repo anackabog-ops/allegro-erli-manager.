@@ -12,6 +12,7 @@ const VALID_TARGET = {
   host: '127.0.0.1',
   port: 35432,
   database: 'openlinker',
+  password: 'local-test-password',
 };
 
 test('accepts the explicitly opted-in isolated loopback database', () => {
@@ -34,6 +35,13 @@ test('requires both explicit demo opt-ins', () => {
   );
 });
 
+test('requires an explicit database password', () => {
+  assert.throws(
+    () => assertDemoTarget({ ...VALID_TARGET, password: undefined }),
+    /OL_DEMO_PGPASSWORD/
+  );
+});
+
 test('rejects hostnames and non-loopback database targets', () => {
   for (const host of ['localhost', '::1', '192.0.2.1', '1270.0.0.1', 'invalid']) {
     assert.throws(() => assertDemoTarget({ ...VALID_TARGET, host }), /loopback:35432\/openlinker/);
@@ -46,9 +54,6 @@ test('rejects hostnames and non-loopback database targets', () => {
 
 test('reports invalid demo database ports explicitly', () => {
   for (const port of [5432, Number.NaN]) {
-    assert.throws(
-      () => assertDemoTarget({ ...VALID_TARGET, port }),
-      /OL_DEMO_PGPORT=35432/
-    );
+    assert.throws(() => assertDemoTarget({ ...VALID_TARGET, port }), /OL_DEMO_PGPORT=35432/);
   }
 });

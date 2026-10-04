@@ -9,7 +9,15 @@ import { isIP } from 'node:net';
 export const DEMO_PG_PORT = 35432;
 export const DEMO_PG_DATABASE = 'openlinker';
 
-export function assertDemoTarget({ nodeEnv, demoMode, seedConfirmation, host, port, database }) {
+export function assertDemoTarget({
+  nodeEnv,
+  demoMode,
+  seedConfirmation,
+  host,
+  port,
+  database,
+  password,
+}) {
   if (nodeEnv === 'production') {
     throw new Error('Refusing to seed when NODE_ENV=production.');
   }
@@ -18,6 +26,9 @@ export function assertDemoTarget({ nodeEnv, demoMode, seedConfirmation, host, po
   }
   if (seedConfirmation !== 'YES') {
     throw new Error('Set OL_ALLOW_SYNTHETIC_ORDER_SEED=YES to confirm this seed.');
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('Set OL_DEMO_PGPASSWORD to the isolated demo database password.');
   }
   if (!Number.isInteger(port) || port !== DEMO_PG_PORT) {
     throw new Error(`Set OL_DEMO_PGPORT=${DEMO_PG_PORT} for the isolated demo database.`);

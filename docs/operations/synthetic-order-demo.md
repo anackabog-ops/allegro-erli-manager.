@@ -30,10 +30,22 @@ WEB_HOST_PORT=38090
 OL_DEMO_MODE=true
 OL_REGISTRATION_ENABLED=false
 OL_BOOTSTRAP_ADMIN_PASSWORD=replace-with-a-unique-local-password
+POSTGRES_PASSWORD=replace-with-a-unique-local-database-password
 ```
 
 Generate `OPENLINKER_CREDENTIALS_ENCRYPTION_KEY` locally as described in
-`.env.example`. Then start only the services required for the order interface:
+`.env.example`. Set a unique `POSTGRES_PASSWORD` in `.env`. Before seeding,
+load the local variables into your shell and pass the same database password
+explicitly to the seed:
+
+```bash
+set -a
+. ./.env
+set +a
+export OL_DEMO_PGPASSWORD="$POSTGRES_PASSWORD"
+```
+
+Then start only the services required for the order interface:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.demo.yml \
@@ -49,9 +61,8 @@ Run this explicit command from the repository root. It requires both opt-in
 flags, refuses `NODE_ENV=production` and non-loopback/non-demo database
 settings, and writes only its fixed IDs using conflict-do-nothing inserts:
 the database port and name are intentionally fixed to `35432` and `openlinker`.
-Database credentials default to `postgres` / `postgres`; if the isolated
-Postgres service uses different values, pass them through
-`OL_DEMO_PGUSER` / `OL_DEMO_PGPASSWORD`.
+The seed requires `OL_DEMO_PGPASSWORD`; it has no default password. Set
+`OL_DEMO_PGUSER` only if the isolated Postgres user differs from `postgres`.
 
 ```bash
 OL_DEMO_MODE=true \

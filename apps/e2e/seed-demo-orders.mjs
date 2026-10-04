@@ -6,11 +6,9 @@
  * enabled capabilities; this script never loads an adapter or calls a platform.
  */
 import pg from 'pg';
-import {
-  assertDemoTarget,
-  DEMO_PG_DATABASE,
-  DEMO_PG_PORT,
-} from './seed-demo-orders.guard.mjs';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { assertDemoTarget, DEMO_PG_DATABASE, DEMO_PG_PORT } from './seed-demo-orders.guard.mjs';
 
 const { Client } = pg;
 const SEED_ID = 'synthetic-order-set-v1';
@@ -18,7 +16,7 @@ const DB = {
   host: process.env.OL_DEMO_PGHOST ?? '127.0.0.1',
   port: Number(process.env.OL_DEMO_PGPORT ?? DEMO_PG_PORT),
   user: process.env.OL_DEMO_PGUSER ?? 'postgres',
-  password: process.env.OL_DEMO_PGPASSWORD ?? 'postgres',
+  password: process.env.OL_DEMO_PGPASSWORD,
   database: process.env.OL_DEMO_PGDATABASE ?? DEMO_PG_DATABASE,
 };
 
@@ -168,7 +166,7 @@ const DEFINITIONS = [
   },
 ];
 
-function makeOrder({
+export function makeOrder({
   platformType,
   serial,
   placedAt,
@@ -269,7 +267,7 @@ const HOLDS = [
   },
 ];
 
-async function insertAndVerify(
+export async function insertAndVerify(
   client,
   { insertSql, insertValues, selectSql, selectValues, isValid, label }
 ) {
@@ -421,7 +419,11 @@ async function seed() {
   }
 }
 
-seed().catch((error) => {
-  console.error(error instanceof Error ? error.message : 'Synthetic demo seed failed.');
-  process.exitCode = 1;
-});
+const isDirectExecution =
+  process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
+if (isDirectExecution) {
+  seed().catch((error) => {
+    console.error(error instanceof Error ? error.message : 'Synthetic demo seed failed.');
+    process.exitCode = 1;
+  });
+}
