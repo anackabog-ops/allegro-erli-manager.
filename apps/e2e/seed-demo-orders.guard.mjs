@@ -6,6 +6,9 @@
  */
 import { isIP } from 'node:net';
 
+export const DEMO_PG_PORT = 35432;
+export const DEMO_PG_DATABASE = 'openlinker';
+
 export function assertDemoTarget({ nodeEnv, demoMode, seedConfirmation, host, port, database }) {
   if (nodeEnv === 'production') {
     throw new Error('Refusing to seed when NODE_ENV=production.');
@@ -16,10 +19,13 @@ export function assertDemoTarget({ nodeEnv, demoMode, seedConfirmation, host, po
   if (seedConfirmation !== 'YES') {
     throw new Error('Set OL_ALLOW_SYNTHETIC_ORDER_SEED=YES to confirm this seed.');
   }
+  if (!Number.isInteger(port) || port !== DEMO_PG_PORT) {
+    throw new Error(`Set OL_DEMO_PGPORT=${DEMO_PG_PORT} for the isolated demo database.`);
+  }
   const isIpv4Loopback = isIP(host) === 4 && Number(host.split('.')[0]) === 127;
-  if (!isIpv4Loopback || database !== 'openlinker' || port !== 35432) {
+  if (!isIpv4Loopback || database !== DEMO_PG_DATABASE) {
     throw new Error(
-      'The seed only accepts the isolated local demo database at loopback:35432/openlinker.'
+      `The seed only accepts the isolated local demo database at loopback:${DEMO_PG_PORT}/${DEMO_PG_DATABASE}.`
     );
   }
 }

@@ -16,6 +16,7 @@ const VALID_TARGET = {
 
 test('accepts the explicitly opted-in isolated loopback database', () => {
   assert.doesNotThrow(() => assertDemoTarget(VALID_TARGET));
+  assert.doesNotThrow(() => assertDemoTarget({ ...VALID_TARGET, host: '127.0.0.2' }));
 });
 
 test('rejects production regardless of opt-ins', () => {
@@ -34,15 +35,20 @@ test('requires both explicit demo opt-ins', () => {
 });
 
 test('rejects hostnames and non-loopback database targets', () => {
-  for (const host of ['localhost', '::1', '192.0.2.1']) {
+  for (const host of ['localhost', '::1', '192.0.2.1', '1270.0.0.1', 'invalid']) {
     assert.throws(() => assertDemoTarget({ ...VALID_TARGET, host }), /loopback:35432\/openlinker/);
   }
   assert.throws(
     () => assertDemoTarget({ ...VALID_TARGET, database: 'production' }),
     /loopback:35432\/openlinker/
   );
-  assert.throws(
-    () => assertDemoTarget({ ...VALID_TARGET, port: 5432 }),
-    /loopback:35432\/openlinker/
-  );
+});
+
+test('reports invalid demo database ports explicitly', () => {
+  for (const port of [5432, Number.NaN]) {
+    assert.throws(
+      () => assertDemoTarget({ ...VALID_TARGET, port }),
+      /OL_DEMO_PGPORT=35432/
+    );
+  }
 });
