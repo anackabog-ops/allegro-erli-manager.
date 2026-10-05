@@ -6,9 +6,8 @@ production-ready marketplace integration. Allegro/Erli connections remain
 disabled; no marketplace credentials are needed.
 
 The setup is configured in Railway's dashboard so each monorepo service can use
-its own build settings. It does not add Railway config-as-code files whose
-support is being phased out. Railway's current deployment and pricing
-documentation is linked in [References](#references).
+its own build settings. Railway's current deployment and pricing documentation
+is linked in [References](#references).
 
 ## Before you start
 
@@ -191,7 +190,8 @@ dashboard before leaving the environment running.
 - [Railway monorepo deployments](https://docs.railway.com/deployments/monorepo)
 - [Railway Dockerfiles](https://docs.railway.com/builds/dockerfiles)
 - [Railway health checks](https://docs.railway.com/deployments/healthchecks)
-- [Railway PostgreSQL guide](https://docs.railway.com/guides/postgresql)
-- [Railway private networking](https://docs.railway.com/guides/private-networking)
+- [Railway PostgreSQL guide](https://docs.railway.com/databases/postgresql)
+- [Railway Redis guide](https://docs.railway.com/databases/redis)
+- [Railway private networking](https://docs.railway.com/networking/private-networking)
 - [Railway pricing](https://docs.railway.com/pricing)
 - [OpenLinker local synthetic order procedure](operations/synthetic-order-demo.md)
