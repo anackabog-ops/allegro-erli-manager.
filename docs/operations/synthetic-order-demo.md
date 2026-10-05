@@ -4,6 +4,10 @@ This procedure adds twelve visibly synthetic orders to a **separate local
 OpenLinker demo database**. It does not contact Allegro or Erli and does not
 create working marketplace integrations.
 
+This workflow is intentionally local-only. For a Railway-hosted demo, see the
+[Railway deployment guide](../railway-demo-deployment-guide.md); do not bypass
+the seed's loopback/production safeguards to load these records remotely.
+
 The seed also adds one explicitly labelled, disabled connection row per source.
 These rows exist only so the order list can display Allegro/Erli and its source
 filter can be exercised. They have no credentials, no enabled capabilities,
