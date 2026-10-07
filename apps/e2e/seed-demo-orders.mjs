@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { assertDemoTarget, DEMO_PG_DATABASE, DEMO_PG_PORT } from './seed-demo-orders.guard.mjs';
 
 const { Client } = pg;
-const SEED_ID = 'synthetic-order-set-v1';
+export const SEED_ID = 'synthetic-order-set-v1';
 const DB = {
   host: process.env.OL_DEMO_PGHOST ?? '127.0.0.1',
   port: Number(process.env.OL_DEMO_PGPORT ?? DEMO_PG_PORT),
@@ -20,7 +20,7 @@ const DB = {
   database: process.env.OL_DEMO_PGDATABASE ?? DEMO_PG_DATABASE,
 };
 
-const SOURCES = [
+export const SOURCES = [
   {
     id: '00000000-0000-4000-8000-0000000000a1',
     platformType: 'allegro',
@@ -242,8 +242,8 @@ export function makeOrder({
   };
 }
 
-const ORDERS = DEFINITIONS.map(makeOrder);
-const HOLDS = [
+export const ORDERS = DEFINITIONS.map(makeOrder);
+export const HOLDS = [
   {
     id: '00000000-0000-4000-8000-0000000000b1',
     orderId: ORDERS[1].internalOrderId,
@@ -279,6 +279,99 @@ export async function insertAndVerify(
   return result.rowCount ?? 0;
 }
 
+export async function insertSeedRows(client) {
+  let insertedConnections = 0;
+  for (const source of SOURCES) {
+    insertedConnections += await insertAndVerify(client, {
+      insertSql: `INSERT INTO "connections"
+        ("id", "platformType", "name", "status", "config", "credentialsRef",
+         "adapterKey", "enabledCapabilities")
+       VALUES ($1, $2, $3, 'disabled',
+         jsonb_build_object('openlinkerDemo', jsonb_build_object(
+           'seedId', $4::text, 'syntheticOnly', true, 'noExternalCredentials', true)),
+         'synthetic-demo-no-credentials', NULL, '[]'::jsonb)
+       ON CONFLICT ("id") DO NOTHING`,
+      insertValues: [source.id, source.platformType, source.name, SEED_ID],
+      selectSql: `SELECT "platformType", "name", "status", "credentialsRef", "config",
+              "enabledCapabilities"
+         FROM "connections" WHERE "id" = $1`,
+      selectValues: [source.id],
+      isValid: (stored) =>
+        stored?.platformType === source.platformType &&
+        stored.name === source.name &&
+        stored.status === 'disabled' &&
+        stored.credentialsRef === 'synthetic-demo-no-credentials' &&
+        stored.config?.openlinkerDemo?.seedId === SEED_ID &&
+        stored.config?.openlinkerDemo?.noExternalCredentials === true &&
+        stored.enabledCapabilities?.length === 0,
+      label: `connection row ${source.id}`,
+    });
+  }
+
+  let insertedOrders = 0;
+  for (const order of ORDERS) {
+    insertedOrders += await insertAndVerify(client, {
+      insertSql: `INSERT INTO "order_records"
+        ("internalOrderId", "customerId", "sourceConnectionId", "sourceEventId",
+         "orderSnapshot", "syncStatus", "recordStatus", "mappingFailureReason",
+         "cancelledAt", "activeHoldReason", "createdAt", "updatedAt", "placedAt",
+         "currency", "taxTreatment", "totalAmount", "totalTaxTreatment")
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10,
+               $11, $12, $13, $14, $15, $16, $17)
+       ON CONFLICT ("internalOrderId") DO NOTHING`,
+      insertValues: [
+        order.internalOrderId,
+        order.customerId,
+        order.sourceConnectionId,
+        order.sourceEventId,
+        JSON.stringify(order.orderSnapshot),
+        JSON.stringify(order.syncStatus),
+        order.recordStatus,
+        order.mappingFailureReason,
+        order.cancelledAt,
+        order.activeHoldReason,
+        order.createdAt,
+        order.updatedAt,
+        order.placedAt,
+        order.currency,
+        order.taxTreatment,
+        order.totalAmount,
+        order.totalTaxTreatment,
+      ],
+      selectSql: `SELECT "sourceConnectionId", "orderSnapshot"->'demo'->>'seedId' AS "seedId"
+         FROM "order_records" WHERE "internalOrderId" = $1`,
+      selectValues: [order.internalOrderId],
+      isValid: (stored) =>
+        stored?.sourceConnectionId === order.sourceConnectionId && stored.seedId === SEED_ID,
+      label: `order row ${order.internalOrderId}`,
+    });
+  }
+
+  let insertedHolds = 0;
+  for (const hold of HOLDS) {
+    insertedHolds += await insertAndVerify(client, {
+      insertSql: `INSERT INTO "order_holds"
+        ("id", "internalOrderId", "reason", "note", "placedByUserId",
+         "placedByService", "placedAt", "releasedAt")
+       VALUES ($1, $2, $3, $4, 'synthetic-demo-operator', NULL, $5, NULL)
+       ON CONFLICT ("id") DO NOTHING`,
+      insertValues: [hold.id, hold.orderId, hold.reason, hold.note, hold.placedAt],
+      selectSql: `SELECT "internalOrderId", "reason", "note", "placedByUserId", "releasedAt"
+         FROM "order_holds" WHERE "id" = $1`,
+      selectValues: [hold.id],
+      isValid: (stored) =>
+        stored?.internalOrderId === hold.orderId &&
+        stored.reason === hold.reason &&
+        stored.note === hold.note &&
+        stored.placedByUserId === 'synthetic-demo-operator' &&
+        stored.releasedAt === null,
+      label: `hold row ${hold.id}`,
+    });
+  }
+
+  return { insertedConnections, insertedOrders, insertedHolds };
+}
+
 async function seed() {
   assertDemoTarget({
     nodeEnv: process.env.NODE_ENV,
@@ -309,94 +402,7 @@ async function seed() {
 
     await client.query('BEGIN');
     transactionStarted = true;
-    let insertedConnections = 0;
-    for (const source of SOURCES) {
-      insertedConnections += await insertAndVerify(client, {
-        insertSql: `INSERT INTO "connections"
-          ("id", "platformType", "name", "status", "config", "credentialsRef",
-           "adapterKey", "enabledCapabilities")
-         VALUES ($1, $2, $3, 'disabled',
-           jsonb_build_object('openlinkerDemo', jsonb_build_object(
-             'seedId', $4::text, 'syntheticOnly', true, 'noExternalCredentials', true)),
-           'synthetic-demo-no-credentials', NULL, '[]'::jsonb)
-         ON CONFLICT ("id") DO NOTHING`,
-        insertValues: [source.id, source.platformType, source.name, SEED_ID],
-        selectSql: `SELECT "platformType", "name", "status", "credentialsRef", "config",
-                "enabledCapabilities"
-           FROM "connections" WHERE "id" = $1`,
-        selectValues: [source.id],
-        isValid: (stored) =>
-          stored?.platformType === source.platformType &&
-          stored.name === source.name &&
-          stored.status === 'disabled' &&
-          stored.credentialsRef === 'synthetic-demo-no-credentials' &&
-          stored.config?.openlinkerDemo?.seedId === SEED_ID &&
-          stored.config?.openlinkerDemo?.noExternalCredentials === true &&
-          stored.enabledCapabilities?.length === 0,
-        label: `connection row ${source.id}`,
-      });
-    }
-
-    let insertedOrders = 0;
-    for (const order of ORDERS) {
-      insertedOrders += await insertAndVerify(client, {
-        insertSql: `INSERT INTO "order_records"
-          ("internalOrderId", "customerId", "sourceConnectionId", "sourceEventId",
-           "orderSnapshot", "syncStatus", "recordStatus", "mappingFailureReason",
-           "cancelledAt", "activeHoldReason", "createdAt", "updatedAt", "placedAt",
-           "currency", "taxTreatment", "totalAmount", "totalTaxTreatment")
-         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10,
-                 $11, $12, $13, $14, $15, $16, $17)
-         ON CONFLICT ("internalOrderId") DO NOTHING`,
-        insertValues: [
-          order.internalOrderId,
-          order.customerId,
-          order.sourceConnectionId,
-          order.sourceEventId,
-          JSON.stringify(order.orderSnapshot),
-          JSON.stringify(order.syncStatus),
-          order.recordStatus,
-          order.mappingFailureReason,
-          order.cancelledAt,
-          order.activeHoldReason,
-          order.createdAt,
-          order.updatedAt,
-          order.placedAt,
-          order.currency,
-          order.taxTreatment,
-          order.totalAmount,
-          order.totalTaxTreatment,
-        ],
-        selectSql: `SELECT "sourceConnectionId", "orderSnapshot"->'demo'->>'seedId' AS "seedId"
-           FROM "order_records" WHERE "internalOrderId" = $1`,
-        selectValues: [order.internalOrderId],
-        isValid: (stored) =>
-          stored?.sourceConnectionId === order.sourceConnectionId && stored.seedId === SEED_ID,
-        label: `order row ${order.internalOrderId}`,
-      });
-    }
-
-    let insertedHolds = 0;
-    for (const hold of HOLDS) {
-      insertedHolds += await insertAndVerify(client, {
-        insertSql: `INSERT INTO "order_holds"
-          ("id", "internalOrderId", "reason", "note", "placedByUserId",
-           "placedByService", "placedAt", "releasedAt")
-         VALUES ($1, $2, $3, $4, 'synthetic-demo-operator', NULL, $5, NULL)
-         ON CONFLICT ("id") DO NOTHING`,
-        insertValues: [hold.id, hold.orderId, hold.reason, hold.note, hold.placedAt],
-        selectSql: `SELECT "internalOrderId", "reason", "note", "placedByUserId", "releasedAt"
-           FROM "order_holds" WHERE "id" = $1`,
-        selectValues: [hold.id],
-        isValid: (stored) =>
-          stored?.internalOrderId === hold.orderId &&
-          stored.reason === hold.reason &&
-          stored.note === hold.note &&
-          stored.placedByUserId === 'synthetic-demo-operator' &&
-          stored.releasedAt === null,
-        label: `hold row ${hold.id}`,
-      });
-    }
+    const { insertedConnections, insertedOrders, insertedHolds } = await insertSeedRows(client);
 
     await client.query('COMMIT');
     transactionStarted = false;
