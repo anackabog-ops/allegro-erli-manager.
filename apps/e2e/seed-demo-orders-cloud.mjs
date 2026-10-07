@@ -7,52 +7,9 @@
 import pg from 'pg';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { HOLDS, insertSeedRows, ORDERS, SEED_ID, SOURCES } from './seed-demo-orders.mjs';
-
-const DEMO_DATABASE = 'openlinker_demo';
-const DEMO_TARGET = 'railway-demo';
+import { insertSeedRows, ORDERS, SEED_ID, SOURCES } from './seed-demo-orders.mjs';
+import { assertCloudDemoTarget } from './seed-demo-orders-cloud.guard.mjs';
 const { Client } = pg;
-
-export function assertCloudDemoTarget({
-  nodeEnv,
-  demoMode,
-  seedConfirmation,
-  target,
-  host,
-  port,
-  user,
-  password,
-  database,
-}) {
-  if (nodeEnv !== 'production') {
-    throw new Error('The Railway seed requires NODE_ENV=production.');
-  }
-  if (demoMode !== 'true') {
-    throw new Error('Set OL_DEMO_MODE=true for this explicit seed command.');
-  }
-  if (seedConfirmation !== 'YES') {
-    throw new Error('Set OL_ALLOW_SYNTHETIC_ORDER_SEED=YES to confirm this seed.');
-  }
-  if (target !== DEMO_TARGET) {
-    throw new Error(`Set OL_DEMO_SEED_TARGET=${DEMO_TARGET} to designate the isolated demo database.`);
-  }
-  if (database !== DEMO_DATABASE) {
-    throw new Error(`Refusing database ${database || '(unset)'}; expected ${DEMO_DATABASE}.`);
-  }
-  if (
-    typeof host !== 'string' ||
-    host.length === 0 ||
-    !Number.isInteger(Number(port)) ||
-    Number(port) < 1 ||
-    Number(port) > 65535 ||
-    typeof user !== 'string' ||
-    user.length === 0 ||
-    typeof password !== 'string' ||
-    password.length === 0
-  ) {
-    throw new Error('Set DB_HOST, DB_PORT, DB_USERNAME, and DB_PASSWORD for the isolated demo database.');
-  }
-}
 
 async function assertNoForeignOrders(client) {
   const values = [];
@@ -83,19 +40,21 @@ async function assertNoForeignOrders(client) {
 async function assertNoForeignConnections(client) {
   const values = [];
   const expectedRows = SOURCES.map((source) => {
+    const firstParameter = values.length + 1;
     values.push(source.id, source.platformType, source.name, SEED_ID);
-    const [id, platform, name, seedId] = values.slice(-4).map((_, index) => values.length - 3 + index);
     return `(
-      "id" = $${id}::uuid
-      AND "platformType" = $${platform}
-      AND "name" = $${name}
+      "id" = $${firstParameter}::uuid
+      AND "platformType" = $${firstParameter + 1}
+      AND "name" = $${firstParameter + 2}
       AND "status" = 'disabled'
       AND "credentialsRef" = 'synthetic-demo-no-credentials'
       AND "adapterKey" IS NULL
       AND "enabledCapabilities" = '[]'::jsonb
-      AND "config"->'openlinkerDemo'->>'seedId' = $${seedId}
-      AND "config"->'openlinkerDemo'->>'syntheticOnly' = 'true'
-      AND "config"->'openlinkerDemo'->>'noExternalCredentials' = 'true'
+      AND "config" = jsonb_build_object('openlinkerDemo', jsonb_build_object(
+        'seedId', $${firstParameter + 3}::text,
+        'syntheticOnly', true,
+        'noExternalCredentials', true
+      ))
     )`;
   });
   const {

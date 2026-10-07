@@ -3,7 +3,7 @@
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { assertCloudDemoTarget } from './seed-demo-orders-cloud.mjs';
+import { assertCloudDemoTarget } from './seed-demo-orders-cloud.guard.mjs';
 
 const VALID_TARGET = {
   nodeEnv: 'production',

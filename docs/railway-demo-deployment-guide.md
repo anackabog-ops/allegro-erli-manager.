@@ -1,7 +1,8 @@
 # Railway demo deployment
 
-This guide deploys the current order-list demo as four Railway services:
-PostgreSQL, Redis, API, and web. It is a small evaluation environment, not a
+This guide deploys the order-list demo using six Railway services: PostgreSQL,
+Redis, API, web, a one-shot migration service, and a manually triggered
+synthetic-order seed service. It is a small evaluation environment, not a
 production-ready marketplace integration. Allegro/Erli connections remain
 disabled; no marketplace credentials are needed.
 
@@ -30,14 +31,17 @@ is linked in [References](#references).
 
 ## Create the services
 
-Create **PostgreSQL** and **Redis** from Railway's database templates in the
-same project/environment. Keep both private; do not enable public TCP proxies.
-Use Railway's generated internal connection variables, not public connection
-URLs. PostgreSQL must retain its Railway-managed persistent volume. Redis holds
-queues and coordination state; if the selected Redis template offers
-persistence, enable it, but PostgreSQL remains the durable source of truth.
+Create a **dedicated PostgreSQL service only for this demo** and set its initial
+database name to `openlinker_demo` (for the official PostgreSQL image this is
+`POSTGRES_DB=openlinker_demo`). Do not point the demo API or seed service at a
+database containing real or shared application data. Keep its Railway-managed
+persistent volume enabled. Also create **Redis** in the same
+project/environment. Keep both private; do not enable public TCP proxies. Use
+Railway's generated internal connection variables, not public connection URLs.
+Redis holds queues and coordination state; if its template offers persistence,
+enable it, but PostgreSQL remains the durable source of truth.
 
-Create three services from the same GitHub repository and branch:
+Create four application services from the same GitHub repository and branch:
 
 1. **`migrate`** — a one-shot Railpack service, repository root `/`.
    - Build command: `pnpm install --frozen-lockfile --prod=false`
@@ -52,7 +56,15 @@ Create three services from the same GitHub repository and branch:
    The root production Docker image is not a substitute: its Dockerfile
    documents why the demo migration service builds from the `base` stage.
 
-2. **`api`** — Dockerfile builder, repository root `/`, Dockerfile path
+2. **`seed-demo`** — a one-shot Railpack service, repository root `/`.
+   - Build command: `pnpm install --frozen-lockfile --ignore-scripts --prod=false`
+   - Start command: `pnpm --filter @openlinker/e2e seed:demo-orders:cloud`
+   - No public domain or health check. Disable automatic deploys and leave the
+     service stopped until you intentionally run the import.
+   - Add the database variables and demo-seed variables listed below. Keep
+     `OL_ALLOW_SYNTHETIC_ORDER_SEED` unset except for the manual run.
+
+3. **`api`** — Dockerfile builder, repository root `/`, Dockerfile path
    `Dockerfile`.
    - Start command: `node apps/api/dist/apps/api/src/main.js`
    - The Dockerfile's final stage is the worker image, so this explicit start
@@ -60,17 +72,20 @@ Create three services from the same GitHub repository and branch:
    - Internal port: `3000`; health check path: `/v1/health`.
    - Do not give the API service a public domain until its variables are set.
 
-3. **`web`** — Dockerfile builder, repository root `/`, Dockerfile path
+4. **`web`** — Dockerfile builder, repository root `/`, Dockerfile path
    `apps/web/Dockerfile`.
    - Internal port: `8080` (the unprivileged nginx listener).
    - Set `VITE_API_BASE_URL` as a build-time variable to the API's HTTPS
      public URL, for example `https://<api-domain>.up.railway.app`. This is
      baked into the static bundle; changing it requires a web rebuild.
 
-Set API and web auto-deploys to manual while bootstrapping so an API rollout
-cannot race the one-shot migration service. Later, keep the same order for
-schema-changing releases: deploy `migrate`, verify success, then deploy `api`,
-then rebuild `web` if its API URL changed.
+Set API, web, and seed auto-deploys to manual while bootstrapping so an API
+rollout cannot race the migration service and the seed never runs implicitly.
+Later, keep the same order for schema-changing releases: deploy `migrate`,
+verify success, then deploy `api`, then rebuild `web` if its API URL changed.
+
+There are **six services total**: PostgreSQL, Redis, `migrate`, `seed-demo`,
+`api`, and `web`.
 
 ## Variables
 
@@ -88,9 +103,11 @@ both `migrate` and `api`:
 | `DB_DATABASE` | `${{Postgres.PGDATABASE}}` |
 | `OPENLINKER_CREDENTIALS_ENCRYPTION_KEY` | Unique generated secret; same value on `migrate` and `api` |
 
-The app does not assume that the database is named `openlinker`; use Railway's
-generated `PGDATABASE` reference. The local demo seed has its own fixed
-database-name requirement and is not a Railway seed mechanism.
+Set the PostgreSQL template's initial database to `openlinker_demo` before its
+first deployment. Confirm Railway's `PGDATABASE` variable reports that exact
+name. API, migrations, and the seed service must all use the same dedicated
+service/database. The importer independently checks the connected database
+name; an environment variable alone cannot override that check.
 
 Add these variables to **`api`**:
 
@@ -112,6 +129,15 @@ Add these variables to **`api`**:
 `OL_REGISTRATION_ENABLED=false`. After the first login, change the admin
 password in the application and remove the bootstrap-password variable.
 Never set database, encryption, JWT, or PII secrets as Vite/build arguments.
+
+Add these variables to **`seed-demo`**, in addition to the shared database
+variables and `NODE_ENV=production`:
+
+| Variable | Value |
+|---|---|
+| `OL_DEMO_MODE` | `true` |
+| `OL_DEMO_SEED_TARGET` | `railway-demo` |
+| `OL_ALLOW_SYNTHETIC_ORDER_SEED` | Leave unset except during the explicitly confirmed manual import; set to `YES` only for that run |
 
 ## Deploy in order and enable HTTPS
 
@@ -135,32 +161,69 @@ Never set database, encryption, JWT, or PII secrets as Vite/build arguments.
 The API health check is public and does not require login. Do not make the
 PostgreSQL or Redis services public just to make the health check work.
 
-## Synthetic orders: important limitation
+## Manually load the twelve synthetic orders
 
-The existing twelve-order seed is deliberately **local-only**. It refuses
-`NODE_ENV=production`, requires explicit demo/seed opt-ins, and accepts only
-an IPv4 loopback connection on port `35432` to database `openlinker`. It writes
-fixed synthetic order IDs and two disabled, credential-less Allegro/Erli
-source labels. Those protections are intentional and must not be relaxed for
-Railway.
+The existing local seed command and its guard remain deliberately local-only.
+It refuses `NODE_ENV=production`, requires explicit demo/seed opt-ins, and
+accepts only IPv4 loopback on port `35432` and database `openlinker`. Do not
+weaken those checks. The separate Railway command is guarded for production
+demo operation and requires a distinct database named `openlinker_demo`.
 
-Consequently, there is currently **no supported way to load those twelve
-orders into the Railway database**. Do not point the seed at Railway through a
-TCP tunnel, change its guard, or paste its inserts into Railway's SQL console.
-To view the twelve seeded orders, use the isolated local workflow in
-[`synthetic-order-demo.md`](operations/synthetic-order-demo.md). On Railway,
-keep the database empty until a separately reviewed, production-safe demo-data
-import path exists. With marketplace connections disabled, real Allegro/Erli
-order ingestion is also unavailable.
+To run it in Railway's dashboard, after migrations have succeeded and API/web
+are deployed:
+
+1. Open `seed-demo` → **Variables**. Confirm it references the dedicated
+   PostgreSQL service and has `NODE_ENV=production`, `OL_DEMO_MODE=true`,
+   `OL_DEMO_SEED_TARGET=railway-demo`, and `DB_DATABASE=openlinker_demo`.
+2. Temporarily add `OL_ALLOW_SYNTHETIC_ORDER_SEED=YES`.
+3. Open **Deployments** and manually deploy/redeploy the current commit. The
+   service's configured start command is exactly:
+
+   ```sh
+   pnpm --filter @openlinker/e2e seed:demo-orders:cloud
+   ```
+
+4. Wait for a successful exit and inspect logs for “12 orders” and the number
+   newly inserted. The command has no HTTP endpoint and does not enable or call
+   marketplace adapters.
+5. Remove `OL_ALLOW_SYNTHETIC_ORDER_SEED` again. Keep automatic deploys off.
+
+The importer takes a transaction lock on order, connection, hold, and credential
+tables; it refuses the database before writing if it sees any order that is not
+one of its marked synthetic rows, any connection other than its exact disabled
+credential-less Allegro/Erli labels, or any stored integration credentials.
+Rows use stable IDs and `ON CONFLICT DO NOTHING`, then verify existing seed
+rows. Repeated runs add no duplicates, never update/delete rows, and rollback
+the entire import on a mismatch. Do not run it against a shared or production
+database, through a public database endpoint, or with marketplace credentials
+present. With the disabled source labels, real Allegro/Erli ingestion remains
+unavailable.
+
+For the local-only workflow, see
+[`synthetic-order-demo.md`](operations/synthetic-order-demo.md).
 
 ## Scope and cost estimate
 
 This is a shared, publicly reachable demo containing synthetic order data. It
 is not hardened for real customer data or production order processing. The
-four-service setup omits the worker; background jobs, scheduled syncs, and
+six-service setup omits the worker; background jobs, scheduled syncs, and
 queued work will not be processed. Do not add marketplace credentials or enable
 the disabled demo source rows. Back up the PostgreSQL volume before upgrades
 and remove the Railway environment when the demo is no longer needed.
+
+## Railway verification status
+
+The seed command and safety checks are locally testable; this change has not
+deployed services or provisioned resources on Railway. The following dashboard
+steps therefore remain unverified directly on the platform: setting the
+PostgreSQL template's initial database name, exact Railway variable-reference
+names for the selected templates, Railpack's workspace install/build behavior
+for the migration and seed services, manual redeploy behavior for a stopped
+one-shot service, generated HTTPS domains and health-check routing, and volume
+retention/backup behavior. Confirm these in the Railway UI before treating the
+demo as ready. External access to the live Railway documentation was blocked
+during preparation; the linked references should be checked against the UI's
+current behavior.
 
 As a rough **always-on** example, assume 730 hours/month, average resident
 memory of 0.5 GiB for API, 0.5 GiB for PostgreSQL, 0.25 GiB for Redis, and

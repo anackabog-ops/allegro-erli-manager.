@@ -1,9 +1,9 @@
 /**
- * Explicit local-only seed for synthetic order-list and detail demonstrations.
+ * Local-only entry point for the fixed synthetic order-list demo data.
  *
- * Writes only fixed, marked demo rows to the local OpenLinker database. The
- * Allegro/Erli connection records are disabled labels with no credentials or
- * enabled capabilities; this script never loads an adapter or calls a platform.
+ * Its command retains the loopback-only guard. The shared row writer is also
+ * used by the separately guarded Railway importer. Both create only fixed,
+ * marked rows and disabled, credential-less source labels.
  */
 import pg from 'pg';
 import { resolve } from 'node:path';
