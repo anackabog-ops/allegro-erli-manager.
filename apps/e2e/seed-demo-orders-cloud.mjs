@@ -8,7 +8,7 @@ import pg from 'pg';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { insertSeedRows, ORDERS, SEED_ID, SOURCES } from './seed-demo-orders.mjs';
-import { assertCloudDemoTarget } from './seed-demo-orders-cloud.guard.mjs';
+import { assertCloudDemoTarget, DEMO_DATABASE } from './seed-demo-orders-cloud.guard.mjs';
 const { Client } = pg;
 
 async function assertNoForeignOrders(client) {

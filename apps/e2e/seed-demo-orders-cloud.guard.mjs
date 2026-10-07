@@ -1,7 +1,7 @@
 /**
  * Safety checks for the explicitly designated Railway synthetic-order seed.
  */
-const DEMO_DATABASE = 'openlinker_demo';
+export const DEMO_DATABASE = 'openlinker_demo';
 const DEMO_TARGET = 'railway-demo';
 
 export function assertCloudDemoTarget({
