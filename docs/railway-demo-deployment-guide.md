@@ -246,7 +246,9 @@ memory/CPU may be higher. At an illustrative $1 = €0.92 it is about €17.25
 before tax, but modestly higher usage can exceed €20. Railway's Hobby plan
 minimum is $5/month and includes $5 in usage credits; it is not an additional
 $5 on top of the usage estimate. Check the live pricing page and usage
-dashboard before leaving the environment running.
+dashboard before leaving the environment running. The estimate assumes the
+`migrate` and `seed-demo` one-shot services are stopped after their short runs;
+their execution time and the initial image builds are not included.
 
 ## References
 
