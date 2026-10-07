@@ -1,0 +1,42 @@
+/**
+ * Safety checks for the explicit synthetic-order demo seed.
+ *
+ * Keeps environment and database-target validation independently testable
+ * without opening a database connection.
+ */
+import { isIP } from 'node:net';
+
+export const DEMO_PG_PORT = 35432;
+export const DEMO_PG_DATABASE = 'openlinker';
+
+export function assertDemoTarget({
+  nodeEnv,
+  demoMode,
+  seedConfirmation,
+  host,
+  port,
+  database,
+  password,
+}) {
+  if (nodeEnv === 'production') {
+    throw new Error('Refusing to seed when NODE_ENV=production.');
+  }
+  if (demoMode !== 'true') {
+    throw new Error('Set OL_DEMO_MODE=true for this explicit seed command.');
+  }
+  if (seedConfirmation !== 'YES') {
+    throw new Error('Set OL_ALLOW_SYNTHETIC_ORDER_SEED=YES to confirm this seed.');
+  }
+  if (typeof password !== 'string' || password.length === 0) {
+    throw new Error('Set OL_DEMO_PGPASSWORD to the isolated demo database password.');
+  }
+  if (!Number.isInteger(port) || port !== DEMO_PG_PORT) {
+    throw new Error(`Set OL_DEMO_PGPORT=${DEMO_PG_PORT} for the isolated demo database.`);
+  }
+  const isIpv4Loopback = isIP(host) === 4 && Number(host.split('.')[0]) === 127;
+  if (!isIpv4Loopback || database !== DEMO_PG_DATABASE) {
+    throw new Error(
+      `The seed only accepts the isolated local demo database at loopback:${DEMO_PG_PORT}/${DEMO_PG_DATABASE}.`
+    );
+  }
+}

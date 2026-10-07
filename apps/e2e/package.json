@@ -6,6 +6,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
+    "test": "pnpm test:seed-demo-orders",
+    "seed:demo-orders": "node seed-demo-orders.mjs",
+    "seed:demo-orders:cloud": "node seed-demo-orders-cloud.mjs",
+    "test:seed-demo-orders": "node --test seed-demo-orders.guard.test.mjs seed-demo-orders.test.mjs seed-demo-orders-cloud.test.mjs seed-demo-orders-cloud.int.test.mjs",
     "test:e2e": "pnpm test:e2e:unattended",
     "test:e2e:unattended": "playwright test --project=setup --project=smoke --project=golden-path --project=webhooks --project=woocommerce-parity --project=lifecycle --project=access-control --project=shipping --project=invoicing --project=rich-text --project=sales-documents",
     "test:e2e:full-flow": "E2E_ATTENDED=1 playwright test --project=full-flow --headed",
